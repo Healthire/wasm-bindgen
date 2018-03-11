@@ -413,20 +413,35 @@ impl ToTokens for ast::Import {
                     }
                 }
                 ast::Type::ByValue(ref t) => {
-                    abi_argument_names.push(name);
-                    abi_arguments.push(my_quote! {
-                        #name: <#t as ::wasm_bindgen::convert::WasmBoundary>::Js
-                    });
-                    if i == 0 && is_method {
-                        arg_conversions.push(my_quote! {
-                            let #name = <#t as ::wasm_bindgen::convert::WasmBoundary>
-                                ::into_js(self);
-                        });
-                    } else {
-                        arg_conversions.push(my_quote! {
-                            let #name = <#t as ::wasm_bindgen::convert::WasmBoundary>
-                                ::into_js(#name);
-                        });
+                    match t {
+                        &syn::Type::BareFn(ref f) => {
+                            match f.abi {
+                                Some(_) => {},
+                                _ => panic!("function argument must be extern")
+                            }
+
+                            abi_argument_names.push(name);
+                            abi_arguments.push(my_quote! {
+                                #name: #f
+                            });
+                        },
+                        t => {
+                            abi_argument_names.push(name);
+                            abi_arguments.push(my_quote! {
+                                #name: <#t as ::wasm_bindgen::convert::WasmBoundary>::Js
+                            });
+                            if i == 0 && is_method {
+                                arg_conversions.push(my_quote! {
+                                    let #name = <#t as ::wasm_bindgen::convert::WasmBoundary>
+                                        ::into_js(self);
+                                });
+                            } else {
+                                arg_conversions.push(my_quote! {
+                                    let #name = <#t as ::wasm_bindgen::convert::WasmBoundary>
+                                        ::into_js(#name);
+                                });
+                            }
+                        }
                     }
                 }
                 ast::Type::ByMutRef(_) => panic!("urgh mut"),

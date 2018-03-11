@@ -468,6 +468,9 @@ impl Type {
                     Type::ByRef((*r.elem).clone())
                 }
             }
+            syn::Type::BareFn(_) => {
+                return Type::ByValue(ty.clone());
+            }
             syn::Type::Path(syn::TypePath { qself: None, ref path })
                 if path.leading_colon.is_none() && path.segments.len() == 1 =>
             {

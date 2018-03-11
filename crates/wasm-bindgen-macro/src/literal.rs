@@ -1,4 +1,5 @@
 use ast;
+use syn;
 use proc_macro2::Span;
 use quote::{ToTokens, Tokens};
 use shared;
@@ -170,9 +171,12 @@ impl Literal for ast::Type {
                 panic!("Slices of JsValues not supported")
             }
             ast::Type::ByValue(ref t) => {
-                a.as_char(my_quote! {
-                    <#t as ::wasm_bindgen::convert::WasmBoundary>::DESCRIPTOR
-                });
+                match t {
+                    &syn::Type::BareFn(_) => a.char(shared::TYPE_FUNCTION),
+                    t => a.as_char(my_quote! {
+                        <#t as ::wasm_bindgen::convert::WasmBoundary>::DESCRIPTOR
+                    })
+                }
             }
             ast::Type::ByRef(ref ty) | ast::Type::ByMutRef(ref ty) => {
                 a.as_char(my_quote! {

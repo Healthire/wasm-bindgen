@@ -89,6 +89,7 @@ impl Bindgen {
                 imports: String::new(),
                 typescript: format!("/* tslint:disable */\n"),
                 exposed_globals: Default::default(),
+                require_table_export: false,
                 required_internal_exports: Default::default(),
                 imports_to_rewrite: Default::default(),
                 custom_type_names: Default::default(),

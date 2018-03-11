@@ -278,3 +278,53 @@ fn free_imports() {
         "#)
         .test();
 }
+
+#[test]
+fn fn_args() {
+    test_support::project()
+        .file("src/lib.rs", r#"
+            #![feature(proc_macro)]
+
+            extern crate wasm_bindgen;
+
+            use wasm_bindgen::prelude::*;
+
+            #[wasm_bindgen(module = "./test")]
+            extern {
+                fn set_test_value(v: i32);
+                fn run_function(s: extern fn(i32) -> i32);
+            }
+
+            #[wasm_bindgen]
+            pub fn run() {
+                pub extern fn test_callback(v: i32) -> i32 {
+                    set_test_value(v);
+                    15
+                }
+                run_function(test_callback);
+            }
+        "#)
+        .file("test.js", r#"
+            import { run } from "./out";
+            import * as assert from "assert";
+            
+            var cb_return = 0;
+            var test_value = 0;
+
+            export function set_test_value(v) {
+                test_value = v;
+            }
+
+            export function run_function(callback) {
+                console.log(callback);
+                cb_return = callback(45);
+            }
+
+            export function test() {
+                run();
+                assert.strictEqual(cb_return, 15);
+                assert.strictEqual(test_value, 45);
+            }
+        "#)
+        .test();
+}

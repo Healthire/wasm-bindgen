@@ -12,6 +12,7 @@ pub struct Context<'a> {
     pub imports: String,
     pub typescript: String,
     pub exposed_globals: HashSet<&'static str>,
+    pub require_table_export: bool,
     pub required_internal_exports: HashSet<&'static str>,
     pub config: &'a Bindgen,
     pub module: &'a mut Module,
@@ -226,6 +227,10 @@ impl<'a> Context<'a> {
 
         self.unexport_unused_internal_exports();
 
+        if self.require_table_export {
+            self.export_table();
+        }
+
         (js, self.typescript.clone())
     }
 
@@ -361,6 +366,29 @@ impl<'a> Context<'a> {
             import.module_mut().push_str(module_name);
             *import.field_mut() = renamed_import.clone();
         }
+    }
+
+    fn export_table(&mut self) {
+        if self.module.table_section().unwrap().entries().len() != 1 {
+            panic!("encountered multiple tables in wasm module")
+        }
+
+        // If there is only one table in the module, its internal index is 0
+        // Add it to the exports section
+        let table_index = 0;
+        let exports = self.module
+            .sections_mut()
+            .iter_mut()
+            .filter_map(|section| match *section {
+                Section::Export(ref mut e) => Some(e),
+                _ => None,
+            })
+            .next().unwrap();
+
+        exports.entries_mut().push(ExportEntry::new(
+            "table".to_string(),
+            Internal::Table(table_index),
+        ));
     }
 
     fn unexport_unused_internal_exports(&mut self) {
@@ -1176,6 +1204,7 @@ impl<'a, 'b> SubContext<'a, 'b> {
                         self.cx.required_internal_exports.insert("__wbindgen_free");
                     }
                 }
+                shared::TYPE_FUNCTION => panic!(),
                 shared::TYPE_JS_OWNED => {
                     dst_ts.push_str(": any");
                     self.cx.expose_add_heap_object();
@@ -1270,6 +1299,7 @@ impl<'a, 'b> SubContext<'a, 'b> {
                     return realRet;
                 ", f)
             }
+            Some(shared::TYPE_FUNCTION) => panic!(),
             Some(shared::TYPE_JS_REF) |
             Some(shared::TYPE_BORROWED_STR) => panic!(),
             Some(t) if (t as u32) & shared::TYPE_CUSTOM_REF_FLAG != 0 => panic!(),
@@ -1391,6 +1421,15 @@ impl<'a, 'b> SubContext<'a, 'b> {
                         ", i));
                         self.cx.required_internal_exports.insert("__wbindgen_free");
                     }
+                }
+                shared::TYPE_FUNCTION => {
+                    abi_args.push(format!("ptr{}", i));
+                    extra.push_str(&format!("
+                        let arg{0} = wasm.table.get(ptr{0});
+                    ", i));
+                    invoc_args.push(format!("arg{}", i));
+
+                    self.cx.require_table_export = true;
                 }
                 shared::TYPE_JS_OWNED => {
                     self.cx.expose_take_object();
